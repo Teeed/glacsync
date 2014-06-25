@@ -47,10 +47,13 @@ def main():
 		'database': db_file,
 		'delayed_delete': config.getboolean('General', 'use_delayed_delete'),
 		'dirs_to_sync': json.loads(config.get('General', 'dirs_to_sync')),
+		'print_status': True,
 	}
 
 	glacier_sync = GlacierSync(**final_config)
-	glacier_sync.sync(quiet=False)
+
+	if args.action[0] == 'sync':
+		glacier_sync.sync(print_status=True)
 
 if __name__ == '__main__':
 	main()
