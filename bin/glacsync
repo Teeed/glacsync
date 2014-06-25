@@ -1,6 +1,9 @@
+#!/usr/bin/env python
+#
 # -*- coding: utf-8 -*-
-
+#
 # Application that sync folders to Amazon Glacier.
+# https://github.com/Teeed/glacsync
 #
 # Copyright (C) 2014 Tadeusz Magura-Witkowski
 #
@@ -52,8 +55,12 @@ def main():
 
 	glacier_sync = GlacierSync(**final_config)
 
-	if args.action[0] == 'sync':
-		glacier_sync.sync(print_status=True)
+	action = args.action[0]
+
+	if action == 'sync':
+		glacier_sync.sync()
+	elif action == 'restoredb':
+		glacier_sync.restoredb()
 
 if __name__ == '__main__':
 	main()

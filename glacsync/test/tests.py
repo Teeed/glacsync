@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
-
+#
 # Application that sync folders to Amazon Glacier.
+# https://github.com/Teeed/glacsync
 #
 # Copyright (C) 2014 Tadeusz Magura-Witkowski
 #
