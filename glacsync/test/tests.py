@@ -194,7 +194,7 @@ class TestRemoteFile(unittest.TestCase):
 
 		remote_file = RemoteFile(file_data)
 
-		self.assertEqual(remote_file.last_modified, file_data['last_modified'])
+		self.assertEqual(remote_file.last_modified, datetime.utcfromtimestamp(file_data['last_modified']))
 		self.assertEqual(remote_file.uuid, file_data['uuid'])
 		self.assertEqual(remote_file.path, file_data['path'])
 
@@ -217,13 +217,15 @@ class TestGlacierLocalDatabaseFile(unittest.TestCase):
 			self.assertLess(files_data.uploaded_at, datetime.now()+timedelta(seconds=5))
 			self.assertGreater(files_data.uploaded_at, datetime.now()-timedelta(seconds=5))
 
-	def _test_if_db_files_is(self, data):
-		self._check_files_timestamps()		
+	def _test_if_db_files_is(self, data, care_about_dates=True):
+		if care_about_dates:
+			self._check_files_timestamps()
 		self.assertEqual(list(self.localdatabase.files), data)
 
 		self._read_database()
 
-		self._check_files_timestamps()
+		if care_about_dates:
+			self._check_files_timestamps()
 		self.assertEqual(list(self.localdatabase.files), data)		
 
 	def _test_if_db_pending_jobs_is(self, data):
@@ -309,5 +311,29 @@ class TestGlacierLocalDatabaseFile(unittest.TestCase):
 		with self.assertRaises(InvalidJobTypeException):
 				tmp = set(self.localdatabase.pending_jobs)
 
+	def test_amazon_restore(self):
+		self._create_empty_db()
+
+		archive_list = [{'ArchiveId':'123456',
+			'ArchiveDescription':'{"path": "share/testtest.txt", "last_modified": 1403644047, "uploaded_at": 1403644047}','CreationDate':'2014-06-24T21:07:27Z','Size':32,
+			'SHA256TreeHash':'ce4b64e5ba4e4a37bbb39b8361352270d5cb6c403d84d5898f79fa61a7ff6dda'}
+		]
+
+		self.localdatabase.restore_from_amazon(archive_list)
+
+		testfile = Struct(uuid='123456', path='share/testtest.txt', last_modified=datetime(2014, 6, 24, 23, 7, 11), uploaded_at=datetime(2014, 6, 24, 23, 7, 11))
+
+		self._test_if_db_files_is([testfile], care_about_dates=False)
+
+		# check dates
+		self.assertEqual(self.localdatabase._filedata['files'], [{
+			'last_modified': 1403644047,
+			'path': 'share/testtest.txt',
+			'uploaded_at': 1403644047,
+			'uuid': '123456'}
+		])
+
+
+		
 if __name__ == '__main__':
 	unittest.main()

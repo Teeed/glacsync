@@ -24,7 +24,7 @@ from configparser import ConfigParser
 import argparse
 import json
 
-from glacsync import GlacierSync
+from glacsync.glacsync import GlacierSync
 
 AUTO_VALUE = '<auto>'
 

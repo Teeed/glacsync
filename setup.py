@@ -33,5 +33,6 @@ setup(
 	long_description=open('README.md').read(),
 	install_requires=[
 		'boto >= 2.27.0',
+		'configparser'
 	],
 )

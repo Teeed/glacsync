@@ -171,7 +171,14 @@ class RemoteFilesystem(Filesystem):
 		return self.glacier_local_database.files
 
 	def upload_file(self, local_file):
-		uuid = self.vault.concurrent_create_archive_from_file(local_file.path, local_file.path)
+		file_data = {
+			'path': local_file.path,
+			'last_modified': timegm(local_file.last_modified.timetuple()),
+			'uploaded_at': timegm(datetime.now().timetuple()),		
+		}
+		file_data = json.dumps(file_data)
+
+		uuid = self.vault.concurrent_create_archive_from_file(local_file.path, description=file_data)
 
 		# Just for testing
 		# import random
@@ -195,6 +202,10 @@ class GlacierLocalDatabaseFile(object):
 		try:
 			with file(self.filename, 'r') as db_file:
 				self._filedata = json.load(db_file)
+				if self._filedata.get('pending_jobs') == None:
+					self._filedata['pending_jobs'] = []
+
+					self.write()
 		except IOError: # we do not have database file yet
 			self._filedata = {'files': [], 'pending_jobs': []}
 
@@ -226,13 +237,14 @@ class GlacierLocalDatabaseFile(object):
 		self._filedata['files'].append(file_entry)
 
 		self.write()
-	def restore_from_amazon(self, amaozn_data):
+	def restore_from_amazon(self, amazon_data):
 		self._filedata['files'] = []
-		for archive in amaozn_data:
+		for archive in amazon_data:
+			file_data = json.loads(archive['ArchiveDescription'])
 			file_entry = {
-				'path': archive['ArchiveDescription'],
-				'last_modified' parse_ts(archive['CreationDate']),
-				'uploaded_at': parse_ts(archive['CreationDate']),
+				'path': file_data['path'],
+				'last_modified': file_data['last_modified'],
+				'uploaded_at': file_data['uploaded_at'],
 				'uuid': archive['ArchiveId']
 			}
 			self._filedata['files'].append(file_entry)
@@ -318,7 +330,7 @@ class GlacierSync(object):
 		# check if we are running some job for it
 		for job in self._database.pending_jobs:
 			if isinstance(job, RetreiveInvetoryJob): # yes, we are...
-				aws_job = self._vault.get_job(inventory_job)
+				aws_job = self._vault.get_job(job.uuid)
 				
 				if not aws_job.completed:
 					if self.print_status:
@@ -327,9 +339,22 @@ class GlacierSync(object):
 
 				aws_job_data = json.loads(aws_job.get_output().read())
 
-				self._remote_filesystem.restore_from_amazon(aws_job_data['ArchiveList'])
+				self._database.restore_from_amazon(aws_job_data['ArchiveList'])
 
 				if self.print_status:
 					print 'Local AWS File database is now synced to file list on glacier.'
 
+
+				# lets remove this job from list
+
+				self._database.delete_pending_job(job)
+
 				return True
+
+		# no running job, let's run one :)
+		retreive_job = RetreiveInvetoryJob(self._vault.retrieve_inventory())
+		self._database.add_pending_job(retreive_job)
+
+		if self.print_status:
+			print 'File list retreival job requested. Run this command again after some time.'
+		return False
