@@ -61,6 +61,8 @@ def main():
 		glacier_sync.sync()
 	elif action == 'restoredb':
 		glacier_sync.restoredb()
+	elif action == 'restore':
+		glacier_sync.restore()
 
 if __name__ == '__main__':
 	main()

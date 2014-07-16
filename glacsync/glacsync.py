@@ -180,10 +180,6 @@ class RemoteFilesystem(Filesystem):
 
 		uuid = self.vault.concurrent_create_archive_from_file(local_file.path, description=file_data)
 
-		# Just for testing
-		# import random
-		# uuid = '%s%s' % (random.random(), local_file)
-
 		self.glacier_local_database.add_file(local_file, uuid)
 
 	def delete_file(self, remote_file):
@@ -217,7 +213,7 @@ class GlacierLocalDatabaseFile(object):
 	@property
 	def pending_jobs(self):
 		for entry in self._filedata['pending_jobs']:
-			if entry['__job_type'] in (RetreiveInvetoryJob.__name__, PendingJob.__name__):
+			if entry['__job_type'] in (RetreiveInvetoryJob.__name__, PendingJob.__name__, RetreiveArchiveJob.__name__):
 				yield globals()[entry['__job_type']](entry)
 			else:
 				raise InvalidJobTypeException('Invalid class name in __job_type')
@@ -290,6 +286,9 @@ class PendingJob(object):
 class RetreiveInvetoryJob(PendingJob):
 	pass
 
+class RetreiveArchiveJob(PendingJob):
+	pass
+
 class GlacierSync(object):
 	def __init__(self, aws, database, delayed_delete, dirs_to_sync, print_status=False):
 		super(GlacierSync, self).__init__()
@@ -305,10 +304,15 @@ class GlacierSync(object):
 
 		self.print_status = print_status
 
-	def sync(self):
+	def _filesystem_differences(self):
 		differ_runner = DifferRunner(self._local_filesystem, self._remote_filesystem, [LastModifiedDiffer])
 		
 		differences = differ_runner.differences
+
+		return differences
+
+	def sync(self):
+		differences = self._filesystem_differences()
 
 		for curr_file in differences['new_files']:
 			if self.print_status:
@@ -334,7 +338,7 @@ class GlacierSync(object):
 				
 				if not aws_job.completed:
 					if self.print_status:
-						print 'AWS haven\'t completed job yet. Run this command again after some time.'
+						print 'AWS hasn\'t completed job yet. Run this command again after some time.'
 					return False
 
 				aws_job_data = json.loads(aws_job.get_output().read())
@@ -344,9 +348,7 @@ class GlacierSync(object):
 				if self.print_status:
 					print 'Local AWS File database is now synced to file list on glacier.'
 
-
 				# lets remove this job from list
-
 				self._database.delete_pending_job(job)
 
 				return True
@@ -358,3 +360,22 @@ class GlacierSync(object):
 		if self.print_status:
 			print 'File list retreival job requested. Run this command again after some time.'
 		return False
+
+	def restore(self):
+		# filter pending jobs for RetreiveArchiveJob
+		restore_jobs = [job for job in self._database.pending_jobs if isinstance(job, RetreiveArchiveJob)]
+
+		# if there any restore jobs that means that we are running restore now...
+		if len(restore_jobs):
+			pass
+		else:
+			# we need to place file retreival jobs
+			differences = self._filesystem_differences()
+
+			# deleted files are now just "missing" ones... let's place job to download them!
+			for curr_file in differences['deleted_files']:
+				if self.print_status:
+					print 'Scheduling file get: %s' % curr_file
+
+				# restore_job = RetreiveArchiveJob(self._vault.retrieve_archive(curr_file.uuid))
+				# self._database.add_pending_job(restore_job.id)
